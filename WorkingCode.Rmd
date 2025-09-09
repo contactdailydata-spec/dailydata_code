@@ -21,12 +21,13 @@ library(dplyr)
 library(showtext)
 ```
 
-# Read file
+# Unemployment by age over years
+## Read file
 ```{r}
 Unemployment_Age_Year<-read.csv("Unemployment_Age_Year.csv")
 ```
 
-# Clean dataset
+## Clean dataset
 ```{r}
 # Changing numbers from character with a % sign to numeric 
 Unemployment_Age_Year$X20.24.Years <- as.numeric(gsub("%", "", Unemployment_Age_Year$X20.24.Years))
@@ -43,17 +44,24 @@ Unemployment_Age_Year_long <- Unemployment_Age_Year %>%
   pivot_longer(cols = -Year, names_to = "AgeGroup", values_to = "Value")
 ```
 
-# Graph
+## Graph
 ```{r}
 
 font_add_google("Lato", "lato")  # load Lato font with alias "lato"
 showtext_auto()                      # Enable showtext for future plots
 
-ggplot(Unemployment_Age_Year_long, aes(x = Year, y = Value, color = AgeGroup)) +
+myplot<-ggplot(Unemployment_Age_Year_long, aes(x = Year, y = Value, color = AgeGroup)) +
   geom_line(size = 1) +
-  geom_point(size = 0) +
+  # Add vertical lines for 2008 and 2020
+  geom_vline(xintercept = 2008, linetype = "dashed", color = "gray40", size = 0.8) +
+  geom_vline(xintercept = 2020, linetype = "dashed", color = "gray40", size = 0.8) +
+  # Add text annotations for the events
+  annotate("text", x = 2008, y = max(Unemployment_Age_Year_long$Value) * 0.95, 
+           label = "2008 Recession", angle = 90, hjust = .75, vjust = -0.5, size = 4, color = "gray20") +
+  annotate("text", x = 2020, y = max(Unemployment_Age_Year_long$Value) * 0.95, 
+           label = "COVID-19", angle = 90, hjust=.5, vjust = -0.5, size = 4, color = "gray20") +
   labs(
-    title = "Unemployment Rate by Age Group Over Years",
+    title ="",
     x = "Year",
     y = "Unemployment Rate (%)",
     color = "Age Group"
@@ -63,6 +71,7 @@ ggplot(Unemployment_Age_Year_long, aes(x = Year, y = Value, color = AgeGroup)) +
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
     axis.title = element_text(size = 14),
     axis.text = element_text(size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1),
     legend.title = element_text(size = 13),
     legend.text = element_text(size = 11),
     legend.position = "bottom"
@@ -74,4 +83,5 @@ ggplot(Unemployment_Age_Year_long, aes(x = Year, y = Value, color = AgeGroup)) +
     "45-55" = "#f4a261",  # soft orange
     "55+"   = "#e76f51"   # muted red-orange
   ))
+
 ```
