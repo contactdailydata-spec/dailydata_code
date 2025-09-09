@@ -1,0 +1,77 @@
+---
+title: "WorkingCode"
+output: html_document
+date: "2025-09-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r}
+#install.packages("ggplot2")
+#install.packages("tidyr")
+#install.packages("dplyr")
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+#install.packages("showtext")
+library(showtext)
+```
+
+# Read file
+```{r}
+Unemployment_Age_Year<-read.csv("Unemployment_Age_Year.csv")
+```
+
+# Clean dataset
+```{r}
+# Changing numbers from character with a % sign to numeric 
+Unemployment_Age_Year$X20.24.Years <- as.numeric(gsub("%", "", Unemployment_Age_Year$X20.24.Years))
+Unemployment_Age_Year$X25.34.Years <- as.numeric(gsub("%", "", Unemployment_Age_Year$X25.34.Years))
+Unemployment_Age_Year$X35.44.Years <- as.numeric(gsub("%", "", Unemployment_Age_Year$X35.44.Years))
+Unemployment_Age_Year$X45.54.Years <- as.numeric(gsub("%", "", Unemployment_Age_Year$X45.54.Years))
+Unemployment_Age_Year$X55..Years <- as.numeric(gsub("%", "", Unemployment_Age_Year$X55..Years))
+
+# changing column names so they are cleaner
+colnames(Unemployment_Age_Year)<-c("Year","20-24","25-34","35-44","45-55","55+")
+
+# Long format
+Unemployment_Age_Year_long <- Unemployment_Age_Year %>%
+  pivot_longer(cols = -Year, names_to = "AgeGroup", values_to = "Value")
+```
+
+# Graph
+```{r}
+
+font_add_google("Lato", "lato")  # load Lato font with alias "lato"
+showtext_auto()                      # Enable showtext for future plots
+
+ggplot(Unemployment_Age_Year_long, aes(x = Year, y = Value, color = AgeGroup)) +
+  geom_line(size = 1) +
+  geom_point(size = 0) +
+  labs(
+    title = "Unemployment Rate by Age Group Over Years",
+    x = "Year",
+    y = "Unemployment Rate (%)",
+    color = "Age Group"
+  ) +
+  theme_classic(base_family = "lato") +  # use the Google font alias here
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 11),
+    legend.position = "bottom"
+  )+
+    scale_color_manual(values = c(
+    "20-24"  = "#264653",  # dark blue-green
+    "25-34" = "#2a9d8f",  # medium teal
+    "35-44" = "#e9c46a",  # warm yellow
+    "45-55" = "#f4a261",  # soft orange
+    "55+"   = "#e76f51"   # muted red-orange
+  ))
+```
