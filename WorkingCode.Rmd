@@ -19,6 +19,9 @@ library(dplyr)
 
 #install.packages("showtext")
 library(showtext)
+
+#install.packages("scales")
+library(scales)
 ```
 
 # Unemployment by age over years
@@ -83,5 +86,32 @@ myplot<-ggplot(Unemployment_Age_Year_long, aes(x = Year, y = Value, color = AgeG
     "45-55" = "#f4a261",  # soft orange
     "55+"   = "#e76f51"   # muted red-orange
   ))
+
+```
+
+# Approximate number of Refugees hosted by country as of end of 2024
+```{r}
+CountryRefugees<-read.csv("CountryRefugees.csv") # add data
+colnames(CountryRefugees)<-c("Country", "Refugees") # change column names
+CountryRefugees$Refugees <- as.numeric(gsub(",", "", CountiesRefugees$Refugees)) # remove comma and make numeric
+CountryRefugees$Country <- factor(CountryRefugees$Country, levels = CountryRefugees$Country[order(CountryRefugees$Refugees)]) # put data in decending order
+
+# make plot
+myplot<-ggplot(CountryRefugees, aes(x = Country, y = Refugees, fill = Refugees)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = scales::comma(Refugees)), 
+            hjust = -0.1, size = 3.5, color = "black") +
+  coord_flip() +
+  labs(title = NULL, x = "Host Country", y = "Number of Refugees") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 10),
+    plot.margin = margin(10, 20, 10, 10),
+    legend.position = "none"  # hide legend if you want
+  ) +
+  scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_gradient(low = "#FFC107", high = "#D84315")  # warm yellow to deep red
 
 ```
