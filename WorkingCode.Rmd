@@ -115,3 +115,234 @@ myplot<-ggplot(CountryRefugees, aes(x = Country, y = Refugees, fill = Refugees))
   scale_fill_gradient(low = "#FFC107", high = "#D84315")  # warm yellow to deep red
 
 ```
+
+# How world chess championship games have ended
+```{r}
+
+data <- data.frame(
+  Result = rep(c("Checkmate", "Resignation", "Draw"), each = 2),
+  Player = rep(c("Challenger", "Defender"), times = 3),
+  Count = c(1, 1, 13, 18, 8, 10)
+)
+
+ggplot(data, aes(x = Result, y = Count, fill = Player)) +
+  geom_bar(
+    stat = "identity",
+    position = position_dodge(width = 0.7),
+    width = 0.6,   # thinner bars
+    color = "grey30",
+    size = 0.25
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Challenger" = "#E69F00",  # orange
+      "Defender"   = "#56B4E9"   # blue
+    )
+  ) +
+  labs(
+    title = "",
+    x = "Result",
+    y = "Number of Games",
+    fill = "Player"
+  ) +
+  theme_minimal(base_size = 8) +
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 12),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(color = "grey85")
+  )
+
+
+
+plot_pie_edge_labels_pct <- function(df, title) {
+  df <- df %>%
+    arrange(desc(Result)) %>%
+    mutate(
+      fraction = Count / sum(Count),
+      percent = paste0(round(fraction * 100), "%"),
+      ymax = cumsum(fraction),
+      ymin = c(0, head(ymax, n = -1)),
+      label_position = (ymax + ymin) / 2
+    )
+  
+  ggplot(df, aes(x = 1, y = fraction, fill = Result)) +
+    geom_bar(stat = "identity", width = 1, color = "white", size = 0.8) +
+    coord_polar(theta = "y") +
+    geom_segment(aes(x = 1.5, xend = 1.7, y = label_position, yend = label_position),
+                 color = "black", size = 0.6) +
+    geom_text(aes(x = 2, y = label_position, label = percent),  # Show percentage labels
+              hjust = 0, size = 4, fontface = "bold") +
+    labs(title = title) +
+    theme_void() +
+    scale_fill_grey(start = 0.3, end = 0.8) +
+    xlim(0.5, 2) +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      legend.text = element_text(size = 12)
+    )
+}
+
+
+challenger_data <- filter(data, Player == "Challenger")
+plot_pie_edge_labels_pct(challenger_data, "Challenger's Results")
+
+defender_data <- filter(data, Player == "Defender")
+plot_pie_edge_labels_pct(defender_data, "Defender's Results")
+
+
+```
+
+
+
+
+# Chess checkmate heatmap
+```{r}
+#install.packages("patchwork")
+library(patchwork)
+# -----------------------------
+# Dataset 1: Number of Checkmate Possibilities
+# -----------------------------
+chess_data1 <- tribble(
+  ~rank, ~a, ~b, ~c, ~d, ~e, ~f, ~g, ~h,
+  8, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000,
+  7, 10000, 20000, 20000, 20000, 20000, 20000, 20000, 10000,
+  6, 10000, 20000, 30000, 30000, 30000, 30000, 20000, 10000,
+  5, 8333, 16667, 25000, 33337, 33333, 25000, 16667, 8333,
+  4, 8333, 16667, 25000, 33333, 33333, 25000, 16667, 8333,
+  3, 6666, 13334, 20000, 20000, 20000, 20000, 13334, 6666,
+  2, 6666, 13334, 13334, 13334, 13334, 13334, 13334, 6666,
+  1, 6666, 6666, 6666, 6666, 6666, 6666, 6666, 6666
+)
+
+long_data1 <- chess_data1 %>%
+  pivot_longer(cols = a:h, names_to = "file", values_to = "value") %>%
+  mutate(file = factor(file, levels = c("a","b","c","d","e","f","g","h")))
+
+p1<-ggplot(long_data1, aes(x = file, y = rank, fill = value)) +
+  geom_tile(color = "grey30", size = 0.3) +
+  scale_fill_gradient(low = "#fee5d9", high = "#de2d26", guide = "none") +
+  scale_y_continuous(trans = "reverse", breaks = 1:8) +
+  labs(title = "Heatmap of All Possible Checkmate Positions") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 9, face = "bold")
+  )
+
+# -----------------------------
+# Dataset 2: Actual Most Common Checkmate Positions
+# -----------------------------
+chess_data2 <- tribble(
+  ~rank, ~a, ~b, ~c, ~d, ~e, ~f, ~g, ~h,
+  8, 1.6, 0.9, 1.2, 1.5, 3.7, 2.7, 6.2, 3.1,
+  7, 0.8, 1.1, 1.2, 1.5, 1.8, 1.5, 2.3, 1.0,
+  6, 0.6, 0.9, 1.2, 1.5, 1.8, 1.4, 2.0, 0.9,
+  5, 0.5, 0.8, 1.2, 1.5, 1.7, 1.3, 1.9, 0.8,
+  4, 0.5, 0.7, 1.1, 1.4, 1.5, 1.1, 1.4, 0.7,
+  3, 0.5, 0.7, 1.1, 1.4, 1.5, 1.1, 1.4, 0.7,
+  2, 0.6, 0.9, 1.2, 1.4, 1.5, 1.1, 1.4, 0.8,
+  1, 1.4, 1.1, 1.6, 2.0, 3.6, 2.6, 5.7, 3.9
+)
+
+long_data2 <- chess_data2 %>%
+  pivot_longer(cols = a:h, names_to = "file", values_to = "value") %>%
+  mutate(file = factor(file, levels = c("a","b","c","d","e","f","g","h")))
+
+p2<-ggplot(long_data2, aes(x = file, y = rank, fill = value)) +
+  geom_tile(color = "grey30", size = 0.3) +
+  scale_fill_gradient(low = "#fff7f3", high = "#de2d26", guide = "none") +
+  scale_y_continuous(trans = "reverse", breaks = 1:8) +
+  labs(title = "Heatmap of Actual Most Common Checkmate Positions") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 9, face = "bold")
+  )
+
+p1+p2
+```
+
+
+# Coffee trade across continents Sankey diagram
+```{r}
+# Load libraries
+#install.packages("igraph")
+library(igraph)
+#install.packages("ggraph")
+library(ggraph)
+#install.packages("tidyverse")
+library(tidyverse)
+
+# Create the data frame using data from the UN Comtrade 2023
+coffee <- tibble(
+  exporter = c("Brazil", "Brazil", "Brazil", "Vietnam", "Vietnam",
+               "Colombia", "Indonesia", "Honduras", "India", "Uganda", "Ethiopia"),
+  importer = c("US", "Germany", "Italy", "US", "Japan",
+               "US", "Japan", "US", "Germany", "Germany", "Germany"),
+  value = c(1.47, 0.20, 0.10, 0.35, 0.43,
+            0.77, 0.34, 0.44, 0.23, 0.26, 0.25) # example in million tonnes
+)
+
+coffee <- coffee %>%
+  mutate(value_mkg = value * 1000)  # million tonnes → million kg
+
+# Load ggalluvial (assuming package installed)
+#install.packages("ggalluvial")
+library(ggalluvial)
+library(ggplot2)
+
+# Define a color palette for the exporters
+exporter_colors <- c(
+  "Brazil"    = "#A8D0E6",  # soft sky blue
+  "Vietnam"   = "#F6C1B9",  # pastel peach
+  "Colombia"  = "#F6EAC2",  # light cream
+  "Indonesia" = "#C1E1C1",  # soft mint green
+  "Honduras"  = "#FFD6A5",  # pastel apricot
+  "India"     = "#E2C0FF",  # lavender
+  "Uganda"    = "#FFB7B2",  # soft pink
+  "Ethiopia"  = "#B5EAEA"   # pale turquoise
+)
+
+# Title of graph will be Global Coffee Trade Flows (Top Exporters → Key Importers, 2023)
+ggplot(coffee,
+       aes(axis1 = exporter, axis2 = importer, y = value_mkg)) +
+  geom_alluvium(aes(fill = exporter), width = 1/12, alpha = 0.5, show.legend = FALSE) +
+  geom_stratum(width = 1/12, fill = gray(0.99), color = gray(0.90)) +
+
+  # Stratum labels
+  geom_text(stat = "stratum", aes(
+    label = after_stat(stratum),
+    hjust = after_stat(ifelse(x == 1, 1, 0)),
+    x = after_stat(ifelse(x == 1, x - 0.05, x + 0.05))  # reduced nudging
+  ),
+  size = 3.5, fontface = "bold", color = "black") +
+
+  # Flow numbers (midpoints of alluvia)
+  geom_text(aes(label = value_mkg), stat = "alluvium",
+            size = 3, color = "black")+
+  scale_fill_manual(values = exporter_colors) +
+  scale_x_discrete(
+    limits = c("Exporter", "Importer"),
+    expand = expansion(mult = c(0.2, 0.2))
+  ) +
+  labs(
+    title = "",
+    y = "Million Kilograms of Coffee Beans",
+    x = ""
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.ticks = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+
+
