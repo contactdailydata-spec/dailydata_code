@@ -346,3 +346,179 @@ ggplot(coffee,
 
 
 
+
+
+# Air quality Events (API above moderate) in counties in  CONUS over the past few years
+```{r}
+#Data from EPA: https://aqs.epa.gov/aqsweb/airdata/download_files.html#AQI
+# -------------------------------
+# Load libraries (only once)
+# -------------------------------
+library(dplyr)
+library(readr)
+library(sf)
+library(tigris)
+library(ggplot2)
+library(lubridate)
+library(patchwork)
+
+options(tigris_use_cache = TRUE)
+
+# -------------------------------
+# Load CONUS county geometries
+# -------------------------------
+counties <- counties(cb = TRUE, year = 2022) %>%
+  st_as_sf() %>%
+  filter(!STATEFP %in% c("02","15","60","66","69","72","78"))  # Remove AK, HI, territories
+
+# Load CONUS state boundaries
+states_sf <- states(cb = TRUE, year = 2022) %>%
+  st_as_sf() %>%
+  filter(!STATEFP %in% c("02","15","60","66","69","72","78"))
+
+# -------------------------------
+# Compute global maximum for color scale
+# -------------------------------
+all_years <- 2019:2024
+max_unhealthy <- 0
+
+for (yr in all_years) {
+  df_tmp <- read_csv(paste0("daily_aqi_by_county_", yr, ".csv"))
+  tmp_count <- df_tmp %>%
+    filter(Category %in% c("Unhealthy", 
+                           "Very Unhealthy", 
+                           "Hazardous")) %>%
+    group_by(`State Code`, `County Code`) %>%
+    summarise(n = n(), .groups = "drop")
+  max_unhealthy <- max(max_unhealthy, max(tmp_count$n, na.rm = TRUE))
+}
+
+# -------------------------------
+# Function to plot AQI exceedances
+# -------------------------------
+plot_aqi_exceedances <- function(df, year) {
+  
+  exceedance_levels <- c("Unhealthy", 
+                         "Very Unhealthy", 
+                         "Hazardous")
+  
+  df_year <- df %>%
+    filter(year(Date) == year)
+  
+  unhealthy_days <- df_year %>%
+    filter(Category %in% exceedance_levels) %>%
+    group_by(`State Code`, `County Code`, `State Name`, `county Name`) %>%
+    summarise(unhealthy_days = n(), .groups = "drop") %>%
+    mutate(FIPS = sprintf("%02s%03s", `State Code`, `County Code`))
+  
+  map_data <- counties %>%
+    left_join(unhealthy_days, by = c("GEOID" = "FIPS"))
+  
+  ggplot() +
+    geom_sf(data = map_data, aes(fill = unhealthy_days), color = NA) +
+    geom_sf(data = states_sf, fill = NA, color = "black", size = 0.3) +
+    scale_fill_gradient(
+      low = "lightpink",
+      high = "darkred",
+      limits = c(0, max_unhealthy),
+      na.value = "grey90"
+    ) +
+    labs(
+      title = as.character(year),
+      fill = "Number of Unhealthy Air Quality Days"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 16),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank()
+    )
+}
+
+# -------------------------------
+# Generate plots for each year
+# -------------------------------
+p2024 <- plot_aqi_exceedances(read_csv("daily_aqi_by_county_2024.csv"), 2024) & theme(legend.position = "none")
+p2023 <- plot_aqi_exceedances(read_csv("daily_aqi_by_county_2023.csv"), 2023) & theme(legend.position = "none")
+p2022 <- plot_aqi_exceedances(read_csv("daily_aqi_by_county_2022.csv"), 2022) & theme(legend.position = "none")
+p2021 <- plot_aqi_exceedances(read_csv("daily_aqi_by_county_2021.csv"), 2021) & theme(legend.position = "none")
+p2020 <- plot_aqi_exceedances(read_csv("daily_aqi_by_county_2020.csv"), 2020) & theme(legend.position = "none")
+p2019 <- plot_aqi_exceedances(read_csv("daily_aqi_by_county_2019.csv"), 2019) & theme(legend.position = "none")
+
+# -------------------------------
+# Combine plots in 2x3 grid with one shared legend
+# -------------------------------
+combined <- (p2024 | p2023 | p2022) / 
+            (p2021 | p2020 | p2019) + 
+            plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+# Display combined figure
+combined
+
+# Number of Wild fires according to national interagency fire center https://www.nifc.gov/fire-information/statistics/wildfires?utm_source=chatgpt.com
+
+# 2019: 50,477
+# 2020: 58,950
+# 2021: 58,985
+# 2022: 68,988
+# 2023: 56,580
+# 2024: 64,897
+
+```
+
+# Number and acres of wildfires each year in CA
+```{r}
+# DATA from: National Interagency Fire Center and CAL Fire
+# Title: Acres of Wildfire Burn and Total Annual Precipitation in California from 2019-2024
+
+library(ggplot2)
+
+# Data
+ca_fire_data <- data.frame(
+  Year = 2019:2024,
+  Precipitation = c(14.9, 5.8, 5.8, 28.4, 44.1, 25.2),
+  Acres_Burned = c(4664364, 10122336, 7125643, 7577183, 2693910, 8924884)
+)
+
+# Scale factor for precipitation
+max_acres <- max(ca_fire_data$Acres_Burned / 1e6)
+max_precip <- max(ca_fire_data$Precipitation)
+scale_factor <- max_acres / max_precip
+
+# Plot
+ggplot(ca_fire_data, aes(x = Year)) +
+  
+  # Bar for acres burned (in millions)
+  geom_col(aes(y = Acres_Burned / 1e6), fill = "firebrick", alpha = 0.7) +
+  
+  # Line for precipitation, scaled
+  geom_line(aes(y = Precipitation * scale_factor), color = "blue", size = 1.5) +
+  geom_point(aes(y = Precipitation * scale_factor), color = "blue", size = 3) +
+  
+  # Y-axis labels
+  scale_y_continuous(
+    name = "Acres Burned (millions)",
+    limits = c(0, 12),
+    sec.axis = sec_axis(~ . / scale_factor, name = "Precipitation (inches)")
+  ) +
+  
+  # X-axis breaks for each year
+  scale_x_continuous(breaks = 2019:2024) +
+  
+  labs(
+    title = "",
+    x = "Year"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.title.y.left = element_text(color = "firebrick", size = 14),
+    axis.title.y.right = element_text(color = "blue", size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12)
+  )
+
+
+```
