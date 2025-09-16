@@ -24,6 +24,7 @@ library(showtext)
 library(scales)
 ```
 
+
 # Unemployment by age over years
 ## Read file
 ```{r}
@@ -467,6 +468,8 @@ combined
 
 ```
 
+
+
 # Number and acres of wildfires each year in CA
 ```{r}
 # DATA from: National Interagency Fire Center and CAL Fire
@@ -522,3 +525,141 @@ ggplot(ca_fire_data, aes(x = Year)) +
 
 
 ```
+
+
+
+# Bad air quality and asthma deaths in California
+```{r}
+library(dplyr)
+library(readr)
+library(purrr)
+library(stringr)
+
+# Asthma data from California Department of public health https://data.chhs.ca.gov/dataset/asthma-hospitalization-rates-by-county
+setwd("C:/Users/Alisha Yee Chan/Documents/Data/")
+RawAsthmaData_County<-read.csv("asthma-hospitalization-rates-by-county-2015-Oct2024.csv")
+AsthmaData_County_2015_2023<-filter(filter(RawAsthmaData_County, YEAR !=2024), COUNTY!="California")[,c(1,2,6)] # Only keep what's neccesary and Data in 2024 isn't complete so removing that year and removing California's total row
+names(AsthmaData_County_2015_2023)[1]<-"County" # Rename column name COUNTY to lower case County
+names(AsthmaData_County_2015_2023)[2]<-"Year"
+
+# Air Quality events data from US EPA: https://aqs.epa.gov/aqsweb/airdata/download_files.html#AQI
+# Directory where your CSV files are stored
+path <- "C:/Users/Alisha Yee Chan/Documents/Data/"
+
+# List all files matching the correct pattern
+files <- list.files(path, pattern = "^annual_aqi_by_county_\\d{4}\\.csv$", full.names = TRUE)
+
+# Load and combine all files into one dataframe
+aqi_all <- files %>%
+  map_dfr(~ read_csv(.x) %>%
+            mutate(Year = str_extract(basename(.x), "\\d{4}")))
+
+Cali_aqi_2015_2023<-data.frame(filter(aqi_all, State=="California"))
+Cali_aqi_2015_2023$BadAQIDays<-Cali_aqi_2015_2023$Unhealthy.for.Sensitive.Groups.Days+Cali_aqi_2015_2023$Unhealthy.Days+Cali_aqi_2015_2023$Very.Unhealthy.Days+Cali_aqi_2015_2023$Hazardous.Days
+
+# Income data
+# Data from HDPulse: An Ecosystem of Minority Health and Health Disparities Resources. National Institute on Minority Health and Health Disparities. Created 9/16/2025. Available from https://hdpulse.nimhd.nih.gov
+
+
+# California median household income and population count in 2023
+ca_income_population_2023 <- data.frame(
+  County = c("Trinity","Siskiyou","Imperial","Modoc",
+             "Lake","Sierra","Humboldt","Tehama",
+             "Lassen","Mendocino","Plumas","Merced",
+             "Mariposa","Del Norte","Kern","Butte",
+             "Kings","Tulare","Glenn","Fresno",
+             "Shasta","Tuolumne","Inyo","Yuba",
+             "Colusa","Sutter","Madera","Stanislaus",
+             "Calaveras","Amador","San Bernardino","Nevada",
+             "Mono","Los Angeles","San Joaquin","Sacramento",
+             "Yolo","Riverside","San Luis Obispo","Monterey",
+             "Santa Barbara","Solano","San Diego","Sonoma",
+             "El Dorado","Ventura","San Benito","Napa",
+             "Santa Cruz","Alpine","Orange","Placer",
+             "Contra Costa","Alameda","San Francisco","Marin",
+             "San Mateo","Santa Clara"),
+  Median_Household_Income = c(53498,55499,56393,56648,58738,60000,61135,61834,
+                              64395,64688,64946,65044,65378,66780,67660,68574,
+                              68750,69489,70487,71434,71931,72259,72432,73313,
+                              75149,75450,75496,79661,79877,81526,82184,84905,
+                              86953,87760,88531,88724,88818,89672,93398,94486,
+                              95977,99994,102285,102840,106190,107327,108289,108970,
+                              109266,110781,113702,114678,125727,126240,141446,142785,
+                              156000,159674),
+  Population_count = c(13000,43000,181000,9000,67764,3000,135000,65000,
+                       34000,87000,19000,300000,18000,28000,922529,228000,
+                       152000,470000,29000,1024125,180000,55259,19000,80000,
+                       22000,100000,165000,560000,46000,39000,2214281,100000,
+                       15000,9663345,779233,1611231,230000,2529933,285000,435000,
+                       448000,453000,3298799,510000,200000,835427,70000,140000,
+                       275000,15000,3170435,400000,1172607,1649060,842000,270000,
+                       774000,1877592)
+)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+library(scales)
+
+# Step 1: Merge the asthma and AQI data
+df <- AsthmaData_County_2015_2023 %>%
+  inner_join(Cali_aqi_2015_2023, by = c("County", "Year")) %>%
+  # Add Median Household Income + Population Count from 2023
+  left_join(ca_income_population_2023, by = "County")
+
+# Step 2: Fit Poisson model with population offset
+poisson_model <- glm(NUMBER.OF.HOSPITALIZATIONS ~ BadAQIDays + Median_Household_Income +
+                       offset(log(Population_count)),
+                     data = df,
+                     family = poisson())
+summary(poisson_model)
+
+# Step 3: Generate predictions for plotting
+income_levels <- c(60000, 80000, 100000, 120000, 140000, 160000, 180000, 200000)
+
+pred_df <- expand.grid(
+  BadAQIDays = seq(min(df$BadAQIDays), max(df$BadAQIDays), length.out = 100),
+  Median_Household_Income = income_levels
+)
+
+# Use the average population so predictions are in total hospitalizations
+avg_pop <- mean(df$Population_count)
+pred_df$Population_count <- avg_pop
+
+# Predict total hospitalizations with standard errors
+pred <- predict(poisson_model, newdata = pred_df, type = "link", se.fit = TRUE)
+
+# Calculate 95% confidence intervals on response scale
+pred_df$Predicted_Hosp <- exp(pred$fit)
+pred_df$CI_lower <- exp(pred$fit - 1.96 * pred$se.fit)
+pred_df$CI_upper <- exp(pred$fit + 1.96 * pred$se.fit)
+
+# Keep Income_Label numeric for plotting, ordered high → low
+pred_df$Income_Label <- factor(pred_df$Median_Household_Income,
+                               levels = rev(income_levels))
+
+# Create formatted labels for legend
+income_labels <- setNames(dollar(income_levels), income_levels)
+
+# Step 4: Plot predicted total hospitalizations with shaded confidence intervals
+ggplot(pred_df, aes(x = BadAQIDays, y = Predicted_Hosp, color = Income_Label, fill = Income_Label)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = CI_lower, ymax = CI_upper), alpha = 0.2, color = NA) +
+  labs(x = "Number of Unhealthy Air Quality Days in California",
+       y = "Predicted Number of Asthma Hospitalizations in California",
+       color = "Median Household Income",
+       fill = "Median Household Income") +
+  scale_color_viridis_d(option = "F", labels = income_labels) +
+  scale_fill_viridis_d(option = "F", labels = income_labels) +
+  theme_minimal()
+
+
+```
+
+
+
+
+
+
+
+
+
