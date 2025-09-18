@@ -528,7 +528,7 @@ ggplot(ca_fire_data, aes(x = Year)) +
 
 
 
-# Bad air quality and asthma deaths in California
+# Bad air quality and asthma hospitalizations in California across different median household income
 ```{r}
 library(dplyr)
 library(readr)
@@ -621,11 +621,11 @@ pred_df <- expand.grid(
   Median_Household_Income = income_levels
 )
 
-# Use the average population so predictions are in total hospitalizations
+# Use the average population so estimates are in total hospitalizations
 avg_pop <- mean(df$Population_count)
 pred_df$Population_count <- avg_pop
 
-# Predict total hospitalizations with standard errors
+# estimated total hospitalizations with standard errors
 pred <- predict(poisson_model, newdata = pred_df, type = "link", se.fit = TRUE)
 
 # Calculate 95% confidence intervals on response scale
@@ -640,12 +640,12 @@ pred_df$Income_Label <- factor(pred_df$Median_Household_Income,
 # Create formatted labels for legend
 income_labels <- setNames(dollar(income_levels), income_levels)
 
-# Step 4: Plot predicted total hospitalizations with shaded confidence intervals
+# Step 4: Plot estimated total hospitalizations with shaded confidence intervals
 ggplot(pred_df, aes(x = BadAQIDays, y = Predicted_Hosp, color = Income_Label, fill = Income_Label)) +
   geom_line(size = 1.2) +
   geom_ribbon(aes(ymin = CI_lower, ymax = CI_upper), alpha = 0.2, color = NA) +
   labs(x = "Number of Unhealthy Air Quality Days in California",
-       y = "Predicted Number of Asthma Hospitalizations in California",
+       y = "Estimated Number of Asthma Hospitalizations in California",
        color = "Median Household Income",
        fill = "Median Household Income") +
   scale_color_viridis_d(option = "F", labels = income_labels) +
