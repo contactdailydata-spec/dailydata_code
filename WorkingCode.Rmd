@@ -470,6 +470,7 @@ combined
 
 
 
+
 # Number and acres of wildfires each year in CA
 ```{r}
 # DATA from: National Interagency Fire Center and CAL Fire
@@ -663,3 +664,245 @@ ggplot(pred_df, aes(x = BadAQIDays, y = Predicted_Hosp, color = Income_Label, fi
 
 
 
+
+
+
+# Population growth rate
+```{r}
+# Population data from world development indicators. 1960-2024
+# Long-Term Acceleration or Deceleration of Population Growth by Country (1960-2024)
+# ------------------------------
+# 1. Read your CSV file
+# ------------------------------
+setwd("C:/Users/Alisha Yee Chan/Documents/Data/")
+WorldCountryPopoulationRaw <- read.csv("WorldCountryPopulationsCount.csv", stringsAsFactors = FALSE)
+
+# Remove unnecessary columns
+WorldCountryPopoulationRaw$Country.Name <- NULL
+WorldCountryPopoulationRaw$Indicator.Name <- NULL
+WorldCountryPopoulationRaw$Indicator.Code <- NULL
+
+# ------------------------------
+# 2. Load required libraries
+# ------------------------------
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+# ------------------------------
+# 3. Reshape from wide to long
+# ------------------------------
+WorldCountryPopoulation <- WorldCountryPopoulationRaw %>%
+  pivot_longer(
+    cols = starts_with("X"),       
+    names_to = "Year",
+    values_to = "Population"
+  ) %>%
+  mutate(
+    Year = str_remove(Year, "^X"),  
+    Year = as.integer(Year)         
+  ) %>%
+  arrange(Country.Code, Year)
+
+# ------------------------------
+# 4. Calculate annual growth rate (year-over-year %)
+# ------------------------------
+WorldCountryPopoulation <- WorldCountryPopoulation %>%
+  group_by(Country.Code) %>%
+  mutate(
+    growth_rate = (Population - lag(Population)) / lag(Population) * 100
+  )
+
+# ------------------------------
+# 5. Compute long-term slope of growth rate for each country
+# ------------------------------
+country_trend <- WorldCountryPopoulation %>%
+  group_by(Country.Code) %>%
+  summarize(
+    slope = ifelse(sum(!is.na(growth_rate)) > 1,
+                   coef(lm(growth_rate ~ Year, data = cur_data()))[2],
+                   NA_real_)
+  )
+
+# ------------------------------
+# 6. Load world map
+# ------------------------------
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# ------------------------------
+# 7. Join map with slope data using Country.Code
+# ------------------------------
+world_trend <- world %>%
+  left_join(country_trend, by = c("iso_a3" = "Country.Code"))
+
+# ------------------------------
+# 8. Plot the map with gradient
+# ------------------------------
+ggplot(world_trend) +
+  geom_sf(aes(fill = slope)) +
+  scale_fill_gradient2(
+    low = "red", mid = "white", high = "darkgreen", midpoint = 0,
+    name = "Change in Growth Rate\n(% per year²)",
+    guide = guide_colorbar(
+      barwidth = 15,       # wider color bar
+      barheight = 1.5,     # taller bar
+      title.position = "top",  # title above the bar
+      title.hjust = 0.5    # center the title
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "",
+    subtitle = "Red = slowing growth, Green = accelerating growth, White = steady"
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.title.align = 0.5,  # center legend title
+    legend.text.align = 0.5,   # center legend labels
+    plot.subtitle = element_text(hjust = 0.5)  # center subtitle
+  )
+
+```
+
+
+# Human Rabies Deaths by country at different country GDP
+```{r}
+#Title:Countries with the Highest Human Rabies Deaths Over the Last 5 Years (2019–2024)
+
+# Rabies data from the world health organization: https://www.who.int/data/gho/data/indicators/indicator-details/GHO/reported-number-of-human-rabies-deaths?utm_source=chatgpt.com
+# 2019-2024
+
+setwd("C:/Users/Alisha Yee Chan/Documents/Data/")
+HumanRabiesCountry2024_2010<-read.csv("RabiesCountry2024_2010.csv")
+HumanRabiesCountry2024_2010$Rabies.Cases<-as.numeric(HumanRabiesCountry2024_2010$Rabies.Cases)
+
+# I only want the past 5 years
+HumanRabiesCountry2019_2024 <- HumanRabiesCountry2024_2010 %>%
+  filter(Period >= 2019 & Period <= 2024)
+
+library(dplyr)
+
+# Aggregate sum of rabies deaths for each country
+Sum_agg_RabiesCountry <- HumanRabiesCountry2019_2024 %>%
+  group_by(Location) %>%
+  summarise(total_rabies_deaths = sum(Rabies.Cases, na.rm = TRUE)) %>%
+  arrange(desc(total_rabies_deaths))
+
+# Population data from world development indicators
+setwd("C:/Users/Alisha Yee Chan/Documents/Data/")
+WorldCountryPopulationRaw<-read.csv("WorldCountryPopulationsCount.csv")
+WorldCountryPopulation<-WorldCountryPopulationRaw[,c(1,2,69)]
+names(WorldCountryPopulation)<-c("Location","Country.Code","Population")
+
+# # Full join by country
+# merged <- full_join(WorldCountryPopulation, Sum_agg_RabiesCountry, by = "Location")
+# 
+# # Only in WorldCountryPopulation, not in Sum_agg_RabiesCountry
+# only_in_population <- merged %>%
+#   filter(is.na(total_rabies_deaths))
+# 
+# # Only in Sum_agg_RabiesCountry, not in WorldCountryPopulation
+# only_in_rabies <- merged %>%
+#   filter(is.na(Population))
+# 
+# only_in_population
+# only_in_rabies
+
+
+# ------------------------------
+# 2. Standardize country names in Rabies dataset
+# ------------------------------
+
+# Mapping Rabies dataset names → Population dataset names
+name_mapping <- c(
+  "United States of America" = "United States",
+  "United Republic of Tanzania" = "Tanzania",
+  "Iran (Islamic Republic of)" = "Iran, Islamic Rep.",
+  "Bolivia (Plurinational State of)" = "Bolivia",
+  "Türkiye" = "Turkiye",
+  "Venezuela (Bolivarian Republic of)" = "Venezuela, RB",
+  "Egypt" = "Egypt, Arab Rep.",
+  "Lao People's Democratic Republic" = "Lao PDR",
+  "Kyrgyzstan" = "Kyrgyz Republic",
+  "Republic of Moldova" = "Moldova",
+  "United Kingdom of Great Britain and Northern Ireland" = "United Kingdom",
+  "Netherlands (Kingdom of the)" = "Netherlands",
+  "Bahamas" = "Bahamas, The",
+  "Congo" = "Congo, Rep.",
+  "Cook Islands" = "Cook Islands",
+  "Democratic People's Republic of Korea" = "Korea, Dem. People's Rep.",
+  "Democratic Republic of the Congo" = "Congo, Dem. Rep.",
+  "Gambia" = "Gambia, The",
+  "Micronesia (Federated States of)" = "Micronesia, Fed. Sts.",
+  "Niue" = "Niue",
+  "Republic of Korea" = "Korea, Rep.",
+  "Saint Kitts and Nevis" = "St. Kitts and Nevis",
+  "Saint Lucia" = "St. Lucia",
+  "Saint Vincent and the Grenadines" = "St. Vincent and the Grenadines",
+  "Slovakia" = "Slovak Republic",
+  "Yemen" = "Yemen, Rep."  # <-- added this line
+)
+
+
+# Rename countries in Rabies dataset
+Sum_agg_RabiesCountry <- Sum_agg_RabiesCountry %>%
+  mutate(Location = ifelse(Location %in% names(name_mapping),
+                           name_mapping[Location],
+                           Location))
+
+# ------------------------------
+# 3. Full join datasets
+# ------------------------------
+
+full_merged <- full_join(WorldCountryPopulation, Sum_agg_RabiesCountry,
+                         by = "Location")
+
+# ------------------------------
+# 4. Identify unmatched countries
+# ------------------------------
+
+unmatched <- full_merged %>%
+  mutate(
+    missing_from = case_when(
+      is.na(Population) & !is.na(total_rabies_deaths) ~ "Missing from Population",
+      !is.na(Population) & is.na(total_rabies_deaths) ~ "Missing from Rabies",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(missing_from)) %>%
+  select(Location, Population, total_rabies_deaths, missing_from)
+
+# Minimal unmatched now
+
+Combined_dataset<-merge(Sum_agg_RabiesCountry, WorldCountryPopulation, by="Location")
+
+Combined_dataset_TopCountries<-filter(Combined_dataset, total_rabies_deaths>50) 
+
+Combined_dataset_TopCountries$Location <- factor(Combined_dataset_TopCountries$Location, levels = Combined_dataset_TopCountries$Location[order(Combined_dataset_TopCountries$total_rabies_deaths)]) # put data in decending order
+
+library(ggplot2)
+library(scales)
+
+ggplot(Combined_dataset_TopCountries, aes(x = Location, y = total_rabies_deaths, fill = total_rabies_deaths)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = scales::comma(total_rabies_deaths)), 
+            hjust = -0.1, size = 3.5, color = "black") +
+  coord_flip() +
+  labs(title = NULL, x = "Country", y = "Human Deaths from Rabies") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 10),
+    plot.margin = margin(10, 20, 10, 10),
+    legend.position = "none"
+  ) +
+  scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_gradient(low = "#FAF0E6", high = "#8B0000")  # light beige to dark red
+
+
+```
